@@ -19,7 +19,7 @@ def analyze_code(code_text: str, filename: str) -> dict:
         return {"alerts": alerts, "function_lengths": [], "categories": categories}
 
     def contains_hebrew(text):
-        return any('\u0590' <= char <= '\u05ff' for char in text)
+        return any('֐' <= char <= '׿' for char in text)
 
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):

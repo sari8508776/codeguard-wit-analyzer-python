@@ -1,5 +1,10 @@
 import click
 from core import WitManager
+from ui import Ui
+
+class Cli(Ui):
+    def run(self):
+        main()
 
 @click.group()
 def main():
@@ -7,36 +12,34 @@ def main():
 
 @main.command()
 def init():
-    wit = WitManager(".")
-    wit.init()
+    WitManager().init()
 
 @main.command()
 @click.argument('path', default='.')
 def add(path):
-    wit = WitManager(".")
-    wit.add(path)
+    WitManager().add(path)
 
 @main.command()
 @click.argument('message')
 def commit(message):
-    wit = WitManager(".")
-    wit.commit(message)
+    WitManager().commit(message)
+
+@main.command()
+def log():
+    WitManager().log()
 
 @main.command()
 def status():
-    wit = WitManager(".")
-    print(wit.status())
+    print(WitManager().status())
 
 @main.command()
 @click.argument('commit_id')
 def checkout(commit_id):
-    wit = WitManager(".")
-    wit.checkout(commit_id)
+    WitManager().checkout(commit_id)
 
 @main.command()
 def push():
-    wit = WitManager(".")
-    wit.push()
+    WitManager().push()
 
 if __name__ == "__main__":
-    main()
+    Cli().run()

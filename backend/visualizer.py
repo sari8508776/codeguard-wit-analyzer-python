@@ -25,7 +25,7 @@ def create_combined_charts(all_categories: dict, all_lengths: list, file_issue_c
     if file_issue_counts:
         axs[2].bar(file_issue_counts.keys(), file_issue_counts.values(), color='salmon', edgecolor='black')
         axs[2].set_ylabel("Number of Issues")
-        axs[2].set_xticklabels(file_issue_counts.keys(), rotation=45, ha='right')
+        axs[2].set_xticklabels(list(file_issue_counts.keys()), rotation=45, ha='right')
     else:
         axs[2].text(0.5, 0.5, 'No issues found', ha='center', va='center')
     axs[2].set_title("Issues per File (Bar Chart)")

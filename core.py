@@ -1,8 +1,9 @@
 import os
+import json
 import shutil
 import hashlib
-import requests
 import time
+import requests
 from pathlib import Path
 
 
@@ -38,6 +39,7 @@ class WitManager:
                     self._do_copy(self.working_path / item)
         else:
             self._do_copy(self.working_path / path_str)
+        print(f"Added {path_str} to staging area.")
 
     def _do_copy(self, source):
         if not source.exists():
@@ -61,7 +63,35 @@ class WitManager:
         shutil.copytree(self.temp_dir, new_commit_path)
         with open(self.wit_path / "HEAD", "w") as f:
             f.write(commit_id)
+
+        # Save message for 'wit log'
+        log_file = self.wit_path / "commit_log.json"
+        log_data = []
+        if log_file.exists():
+            with open(log_file) as f:
+                log_data = json.load(f)
+        log_data.append({
+            "id": commit_id,
+            "message": message,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+        })
+        with open(log_file, "w") as f:
+            json.dump(log_data, f, indent=2)
+
         print(f"Commit {commit_id} created successfully.")
+
+    def log(self):
+        log_file = self.wit_path / "commit_log.json"
+        if not log_file.exists():
+            print("No commits yet.")
+            return
+        with open(log_file) as f:
+            log_data = json.load(f)
+        for entry in reversed(log_data):
+            print(f"commit {entry['id']}")
+            print(f"Date:    {entry['timestamp']}")
+            print(f"Message: {entry['message']}")
+            print()
 
     def get_last_commit_path(self):
         head_file = self.wit_path / "HEAD"
@@ -105,14 +135,12 @@ class WitManager:
 
     def checkout(self, commit_id):
         target_commit_path = self.commit_dir / commit_id
-
         if not target_commit_path.exists():
             print(f"Error: Commit {commit_id} not found.")
             return
 
         for item in self.working_path.iterdir():
-            if item.name == ".wit":
-                continue
+            if item.name == ".wit": continue
             if item.is_file():
                 item.unlink()
             elif item.is_dir():
@@ -129,8 +157,6 @@ class WitManager:
         print(f"Checked out commit {commit_id}")
 
     def push(self):
-
-
         last_commit_path = self.get_last_commit_path()
         if not last_commit_path or not last_commit_path.exists():
             print("Error: No commits found to push. Please commit your changes first.")
@@ -143,26 +169,36 @@ class WitManager:
 
         print(f"CodeGuard: Analyzing {len(py_files)} files from last commit...")
 
-        files_payload = []
-        opened_files = []
+        # Read all files into memory once so we can send to both endpoints
+        file_contents = []
+        for fp in py_files:
+            with open(fp, "rb") as f:
+                file_contents.append((fp.name, f.read()))
+
         try:
-            for file_path in py_files:
-                f = open(file_path, "rb")
-                opened_files.append(f)
-                files_payload.append(("files", (file_path.name, f, "text/plain")))
+            # --- Step 1: Get alerts ---
+            alerts_payload = [("files", (name, data, "text/plain")) for name, data in file_contents]
+            resp = requests.post("http://127.0.0.1:8000/alerts", files=alerts_payload)
+            if resp.status_code == 200:
+                alerts = resp.json().get("alerts", [])
+                print("\n=== Code Quality Alerts ===")
+                if alerts:
+                    for alert in alerts:
+                        print(f"  - {alert}")
+                else:
+                    print("  No issues found!")
+                print(f"Total: {len(alerts)} warning(s)\n")
 
-            response = requests.post("http://127.0.0.1:8000/analyze", files=files_payload)
-
-            if response.status_code == 200:
+            # --- Step 2: Get analysis graph ---
+            analyze_payload = [("files", (name, data, "text/plain")) for name, data in file_contents]
+            resp = requests.post("http://127.0.0.1:8000/analyze", files=analyze_payload)
+            if resp.status_code == 200:
                 output_graph_path = self.working_path / "code_analysis_report.png"
                 with open(output_graph_path, "wb") as out_f:
-                    out_f.write(response.content)
+                    out_f.write(resp.content)
                 print(f"Push successful! Analysis report saved to: {output_graph_path}")
             else:
-                print(f"Server error during push analysis. Status code: {response.status_code}")
+                print(f"Server error during push analysis. Status code: {resp.status_code}")
 
         except requests.exceptions.ConnectionError:
             print("Error: Could not connect to CodeGuard server. Is your FastAPI backend running?")
-        finally:
-            for f in opened_files:
-                f.close()
